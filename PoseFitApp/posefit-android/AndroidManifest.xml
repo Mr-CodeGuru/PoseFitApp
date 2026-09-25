@@ -5,7 +5,7 @@
     android:versionName="0.1.0">
 
     <uses-sdk
-        android:minSdkVersion="24"
+        android:minSdkVersion="26"
         android:targetSdkVersion="34" />
 
     <!-- Zero Java/Dex code: Application is 100% native Rust machine code -->

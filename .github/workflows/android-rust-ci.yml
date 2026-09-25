@@ -88,7 +88,7 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          cargo ndk -t arm64-v8a -o target/android-apk/lib build --package posefit-android --release
+          cargo ndk -t arm64-v8a -p 26 -o target/android-apk/lib build --package posefit-android --release
 
       - name: Package & Sign Pure-Rust APK (aapt2 + zipalign + apksigner)
         working-directory: PoseFitApp
@@ -138,4 +138,3 @@ jobs:
           name: PoseFit-release-apk
           path: PoseFitApp/target/PoseFit-release.apk
           if-no-files-found: error
-          retention-days: 30
