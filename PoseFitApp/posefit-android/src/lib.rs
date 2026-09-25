@@ -6,6 +6,8 @@
 #[cfg(target_os = "android")]
 use log::error;
 use log::info;
+#[cfg(target_os = "android")]
+use ndk::hardware_buffer_format::HardwareBufferFormat;
 use posefit_core::engine::{PoseFitEngine, WorkoutSummary};
 use posefit_core::exercise::ExerciseResult;
 use posefit_core::inference::BlazePoseEstimator;
@@ -33,6 +35,8 @@ pub struct AndroidPoseFitApp {
     pub current_exercise: String,
     pub exercise_index: usize,
     pub latest_result: Option<ExerciseResult>,
+    pub window_width: u32,
+    pub window_height: u32,
 }
 
 impl AndroidPoseFitApp {
@@ -56,6 +60,8 @@ impl AndroidPoseFitApp {
             current_exercise,
             exercise_index,
             latest_result: None,
+            window_width: 1080,
+            window_height: 2400,
         })
     }
 
@@ -90,8 +96,14 @@ impl AndroidPoseFitApp {
     }
 
     /// Renders the complete application UI directly onto an arbitrary raster buffer.
-    pub fn draw_screen_to_buffer(&self, buffer: &mut [u8], width: u32, height: u32, stride: u32) {
-        let mut fb = FrameBuffer::new(buffer, width, height, stride);
+    pub fn draw_screen_to_buffer(
+        &self,
+        buffer: &mut [u8],
+        width: u32,
+        height: u32,
+        stride_pixels: u32,
+    ) {
+        let mut fb = FrameBuffer::new(buffer, width, height, stride_pixels);
         match &self.mode {
             AppMode::WorkoutSummary(summary) => {
                 HudRenderer::render_summary_card(&mut fb, summary);
@@ -124,20 +136,19 @@ impl AndroidPoseFitApp {
 
         let w = guard.width() as u32;
         let h = guard.height() as u32;
-        let stride = guard.stride() as u32;
-        let bpp = match guard.format().bytes_per_pixel() {
-            Some(b) => b,
-            None => 4,
-        };
+        let stride_pixels = guard.stride() as u32;
 
-        let num_bytes = (stride * h * bpp as u32) as usize;
+        self.window_width = w;
+        self.window_height = h;
+
+        let num_bytes = (stride_pixels * h * 4) as usize;
         let bits_ptr = guard.bits() as *mut u8;
         if bits_ptr.is_null() {
             return;
         }
 
         let buffer = unsafe { std::slice::from_raw_parts_mut(bits_ptr, num_bytes) };
-        self.draw_screen_to_buffer(buffer, w, h, stride);
+        self.draw_screen_to_buffer(buffer, w, h, stride_pixels);
     }
 
     /// Switches the active exercise.
@@ -189,22 +200,25 @@ impl AndroidPoseFitApp {
         Ok(summary)
     }
 
-    /// Handles native touchscreen tap events in pure Rust.
-    pub fn handle_touch(&mut self, x: f32, y: f32, width: u32, height: u32) {
+    /// Handles native touchscreen tap events in pure Rust using actual runtime screen bounds.
+    pub fn handle_touch(&mut self, x: f32, y: f32) {
+        let width = self.window_width as f32;
+        let height = self.window_height as f32;
+
         match &self.mode {
             AppMode::WorkoutSummary(_) => {
                 // Tap anywhere on the summary card dismisses and starts next workout
                 let _ = self.cycle_next_exercise();
             }
             AppMode::LiveWorkout => {
-                let header_h = 120.0f32;
-                let bottom_y = height as f32 - 100.0f32;
+                let header_h = 160.0f32;
+                let bottom_y = height - 140.0f32;
 
                 if y <= header_h {
                     // Tap top bar -> cycle next exercise
                     let _ = self.cycle_next_exercise();
                 } else if y >= bottom_y {
-                    let col_w = width as f32 / 3.0;
+                    let col_w = width / 3.0;
                     if x < col_w {
                         // Left button: Prev
                         let _ = self.cycle_prev_exercise();
@@ -244,7 +258,6 @@ fn android_main(app: AndroidApp) {
         }
     };
 
-    let (win_w, win_h) = (1080u32, 1920u32);
     let mut quit = false;
 
     while !quit {
@@ -255,7 +268,14 @@ fn android_main(app: AndroidApp) {
                 PollEvent::Timeout => {}
                 PollEvent::Main(main_event) => match main_event {
                     MainEvent::InitWindow { .. } => {
-                        info!("Native ANativeWindow initialized. Rendering UI screen.");
+                        info!("Native ANativeWindow initialized. Setting 32-bit RGBA geometry.");
+                        if let Some(window) = app.native_window() {
+                            let _ = window.set_buffers_geometry(
+                                0,
+                                0,
+                                Some(HardwareBufferFormat::R8G8B8A8_UNORM),
+                            );
+                        }
                         state.is_active = true;
                         state.draw_current_screen(&app);
                     }
@@ -264,6 +284,13 @@ fn android_main(app: AndroidApp) {
                         state.is_active = false;
                     }
                     MainEvent::WindowResized { .. } => {
+                        if let Some(window) = app.native_window() {
+                            let _ = window.set_buffers_geometry(
+                                0,
+                                0,
+                                Some(HardwareBufferFormat::R8G8B8A8_UNORM),
+                            );
+                        }
                         state.draw_current_screen(&app);
                     }
                     MainEvent::RedrawNeeded { .. } => {
@@ -296,9 +323,7 @@ fn android_main(app: AndroidApp) {
                 if let InputEvent::MotionEvent(motion) = input_event {
                     if motion.action() == MotionAction::Down {
                         let pointer = motion.pointer_at_index(0);
-                        let x = pointer.x();
-                        let y = pointer.y();
-                        state.handle_touch(x, y, win_w, win_h);
+                        state.handle_touch(pointer.x(), pointer.y());
                         touched = true;
                         return InputStatus::Handled;
                     }
@@ -306,7 +331,7 @@ fn android_main(app: AndroidApp) {
                 InputStatus::Unhandled
             }) {}
 
-            // Redraw immediately when user taps buttons
+            // Redraw immediately on user interaction
             if touched {
                 state.draw_current_screen(&app);
             }
@@ -338,9 +363,9 @@ mod tests {
     fn test_android_screen_buffer_rendering() {
         let app = AndroidPoseFitApp::new().expect("Should initialize without JVM");
         let (w, h) = (720, 1280);
-        let stride = w * 4;
+        let stride_pixels = w;
         let mut buffer = vec![0u8; (w * h * 4) as usize];
-        app.draw_screen_to_buffer(&mut buffer, w, h, stride);
+        app.draw_screen_to_buffer(&mut buffer, w, h, stride_pixels);
 
         let painted_pixels = buffer.iter().filter(|&&b| b > 0).count();
         assert!(
@@ -363,14 +388,16 @@ mod tests {
     #[test]
     fn test_android_touch_handling() {
         let mut app = AndroidPoseFitApp::new().expect("Should initialize without JVM");
+        app.window_width = 1080;
+        app.window_height = 2400;
 
         // Tap top header -> cycle exercise
         let ex1 = app.current_exercise.clone();
-        app.handle_touch(100.0, 50.0, 1080, 1920);
+        app.handle_touch(100.0, 50.0);
         assert_ne!(ex1, app.current_exercise);
 
         // Tap bottom-middle (Finish) -> WorkoutSummary
-        app.handle_touch(540.0, 1850.0, 1080, 1920);
+        app.handle_touch(540.0, 2350.0);
         match &app.mode {
             AppMode::WorkoutSummary(s) => {
                 assert!(s.total_duration_sec >= 0.0);
@@ -379,7 +406,7 @@ mod tests {
         }
 
         // Tap summary card to restart
-        app.handle_touch(500.0, 500.0, 1080, 1920);
+        app.handle_touch(500.0, 500.0);
         assert_eq!(app.mode, AppMode::LiveWorkout);
     }
 }

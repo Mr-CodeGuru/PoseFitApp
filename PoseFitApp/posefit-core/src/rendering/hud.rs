@@ -6,6 +6,7 @@
 use super::font::EmbeddedFont;
 use super::primitives::{
     FrameBuffer, draw_filled_circle_rgba, draw_filled_rect_rgba, draw_line_rgba,
+    draw_rect_outline_rgba,
 };
 use crate::engine::WorkoutSummary;
 use crate::exercise::ExerciseResult;
@@ -78,13 +79,13 @@ impl HudRenderer {
             let lm = &landmarks[idx];
             if lm.visibility >= min_visibility {
                 let (cx, cy) = lm.to_pixel_coords(fb.width, fb.height);
-                draw_filled_circle_rgba(fb, cx, cy, 5, [255, 255, 255, 255]);
-                draw_filled_circle_rgba(fb, cx, cy, 3, [40, 40, 40, 255]);
+                draw_filled_circle_rgba(fb, cx, cy, 6, [255, 255, 255, 255]);
+                draw_filled_circle_rgba(fb, cx, cy, 3, [30, 30, 30, 255]);
             }
         }
     }
 
-    /// Renders the complete HUD overlay (top panel, rep counters, score badge, feedback).
+    /// Renders the complete HUD overlay on top of active video frames.
     pub fn render_hud(fb: &mut FrameBuffer, result: &ExerciseResult) {
         let hud_h = 100u32.min(fb.height / 4);
 
@@ -167,7 +168,7 @@ impl HudRenderer {
         }
     }
 
-    /// Renders a full workout dashboard screen (with header, training guide card, and bottom controls).
+    /// Renders a full workout dashboard screen (with header, hero card, body frame, and bottom touch controls).
     pub fn render_workout_screen(
         fb: &mut FrameBuffer,
         exercise_name: &str,
@@ -175,11 +176,11 @@ impl HudRenderer {
         total_exercises: usize,
         latest_result: Option<&ExerciseResult>,
     ) {
-        // 1. Dark gym background
-        draw_filled_rect_rgba(fb, 0, 0, fb.width, fb.height, [16, 20, 28, 255]);
+        // 1. Deep carbon athletic background
+        draw_filled_rect_rgba(fb, 0, 0, fb.width, fb.height, [14, 17, 24, 255]);
 
-        // 2. Top Header Bar
-        let header_h = 120u32.min(fb.height / 5);
+        // 2. Top Header Bar (Safe area + branding)
+        let header_h = (fb.height / 8).clamp(110, 160);
         draw_filled_rect_rgba(fb, 0, 0, fb.width, header_h, [22, 28, 40, 255]);
         draw_line_rgba(
             fb,
@@ -187,49 +188,38 @@ impl HudRenderer {
             header_h as i32,
             fb.width as i32,
             header_h as i32,
-            2,
-            [0, 200, 255, 255],
+            3,
+            [0, 210, 255, 255],
         );
 
+        // Live beacon dot
+        draw_filled_circle_rgba(fb, 30, 32, 6, [46, 204, 113, 255]);
         EmbeddedFont::draw_text_rgba(
             fb,
+            46,
             24,
-            16,
-            "POSEFIT // PURE RUST AI COACH",
+            "POSEFIT // AI COACH ACTIVE",
             2,
             [0, 220, 255, 255],
         );
 
         let ex_title = format!(
-            "EXERCISE: {} ({}/{})",
-            exercise_name.to_uppercase(),
+            "EXERCISE [{}/{}]: {}",
             exercise_index + 1,
-            total_exercises
+            total_exercises,
+            exercise_name.to_uppercase()
         );
-        EmbeddedFont::draw_text_rgba(fb, 24, 52, &ex_title, 2, [255, 255, 255, 255]);
+        EmbeddedFont::draw_text_rgba(fb, 26, 62, &ex_title, 2, [255, 255, 255, 255]);
 
-        let cycle_hint = "[TAP TO CYCLE]";
-        let cycle_x = (fb.width as i32) - 230;
-        if cycle_x > 24 {
-            EmbeddedFont::draw_text_rgba(fb, cycle_x, 52, cycle_hint, 2, [241, 196, 15, 255]);
-        }
-
-        // 3. Central Training Status Card
-        let card_w = (fb.width as i32 - 40).clamp(280, 800) as u32;
-        let card_h = 240u32.min(fb.height.saturating_sub(header_h + 140));
-        let card_x = (fb.width as i32 - card_w as i32) / 2;
+        // 3. Central Training Guide Card
+        let card_margin = 24i32;
+        let card_w = (fb.width as i32 - (card_margin * 2)).max(280) as u32;
+        let card_h = (fb.height / 4).clamp(180, 240);
+        let card_x = card_margin;
         let card_y = (header_h as i32) + 20;
 
-        draw_filled_rect_rgba(fb, card_x, card_y, card_w, card_h, [28, 36, 52, 255]);
-        draw_line_rgba(
-            fb,
-            card_x,
-            card_y + card_h as i32,
-            card_x + card_w as i32,
-            card_y + card_h as i32,
-            2,
-            [45, 58, 85, 255],
-        );
+        draw_filled_rect_rgba(fb, card_x, card_y, card_w, card_h, [26, 33, 48, 255]);
+        draw_rect_outline_rgba(fb, card_x, card_y, card_w, card_h, 2, [45, 58, 82, 255]);
 
         if let Some(res) = latest_result {
             let reps_str = if res.counter_left > 0 || res.counter_right > 0 {
@@ -242,20 +232,20 @@ impl HudRenderer {
             };
             EmbeddedFont::draw_text_rgba(
                 fb,
-                card_x + 24,
-                card_y + 24,
+                card_x + 20,
+                card_y + 22,
                 &reps_str,
                 3,
                 [46, 204, 113, 255],
             );
 
             let form_str = format!(
-                "FORM SCORE: {}% ({})",
+                "FORM QUALITY: {}% [GRADE {}]",
                 res.form_score,
                 res.form_grade.as_char()
             );
             let grade_col = Self::grade_color(res.form_grade);
-            EmbeddedFont::draw_text_rgba(fb, card_x + 24, card_y + 85, &form_str, 2, grade_col);
+            EmbeddedFont::draw_text_rgba(fb, card_x + 20, card_y + 80, &form_str, 2, grade_col);
 
             let state_str = if let Some(s) = &res.current_state {
                 format!("MOTION STATE: [{}]", s.to_uppercase())
@@ -264,51 +254,88 @@ impl HudRenderer {
             };
             EmbeddedFont::draw_text_rgba(
                 fb,
-                card_x + 24,
-                card_y + 130,
+                card_x + 20,
+                card_y + 125,
                 &state_str,
                 2,
-                [255, 255, 255, 220],
+                [240, 240, 240, 230],
             );
         } else {
             EmbeddedFont::draw_text_rgba(
                 fb,
-                card_x + 24,
-                card_y + 24,
-                "CAMERA ACTIVE",
+                card_x + 20,
+                card_y + 22,
+                "POSE ENGINE READY",
                 3,
                 [0, 220, 255, 255],
             );
             EmbeddedFont::draw_text_rgba(
                 fb,
-                card_x + 24,
+                card_x + 20,
                 card_y + 75,
+                "REPS: 0 | FORM: 100% (GRADE A)",
+                2,
+                [46, 204, 113, 255],
+            );
+            EmbeddedFont::draw_text_rgba(
+                fb,
+                card_x + 20,
+                card_y + 115,
                 "STAND IN VIEW OF CAMERA",
                 2,
                 [255, 255, 255, 255],
             );
             EmbeddedFont::draw_text_rgba(
                 fb,
-                card_x + 24,
-                card_y + 115,
-                "KEEP FULL BODY IN FRAME",
-                2,
-                [180, 190, 210, 255],
-            );
-            EmbeddedFont::draw_text_rgba(
-                fb,
-                card_x + 24,
+                card_x + 20,
                 card_y + 155,
-                "AI POSE ENGINE READY",
+                "ENSURE FULL BODY IS IN FRAME",
                 2,
-                [46, 204, 113, 255],
+                [170, 185, 205, 255],
             );
         }
 
-        // 4. Bottom Controls Bar
-        let bottom_h = 90u32;
-        let bottom_y = (fb.height as i32) - (bottom_h as i32);
-        draw_filled_rect_rgba(fb, 0, bottom_y, fb.width, bottom_h, [22, 28, 40, 255]);
+        // 4. Target Body Frame Visualizer (Center screen wireframe guide)
+        let frame_y = card_y + card_h as i32 + 25;
+        let bottom_bar_h = 130u32;
+        let available_h = (fb.height as i32) - (bottom_bar_h as i32) - frame_y - 20;
+
+        if available_h > 150 {
+            let guide_w = (fb.width as i32 * 6 / 10).clamp(240, 500) as u32;
+            let guide_h = available_h as u32;
+            let guide_x = (fb.width as i32 - guide_w as i32) / 2;
+
+            draw_filled_rect_rgba(fb, guide_x, frame_y, guide_w, guide_h, [18, 23, 33, 180]);
+            draw_rect_outline_rgba(
+                fb,
+                guide_x,
+                frame_y,
+                guide_w,
+                guide_h,
+                2,
+                [0, 180, 230, 160],
+            );
+
+            // Center target crosshair
+            let cx = guide_x + (guide_w as i32 / 2);
+            let cy = frame_y + (guide_h as i32 / 2);
+            draw_line_rgba(fb, cx - 25, cy, cx + 25, cy, 2, [0, 220, 255, 200]);
+            draw_line_rgba(fb, cx, cy - 25, cx, cy + 25, 2, [0, 220, 255, 200]);
+
+            let guide_lbl = "ALIGN FULL BODY HERE";
+            EmbeddedFont::draw_text_rgba(
+                fb,
+                guide_x + 20,
+                frame_y + 20,
+                guide_lbl,
+                2,
+                [0, 200, 255, 220],
+            );
+        }
+
+        // 5. Bottom Interactive Controls Bar
+        let bottom_y = (fb.height as i32) - (bottom_bar_h as i32);
+        draw_filled_rect_rgba(fb, 0, bottom_y, fb.width, bottom_bar_h, [20, 25, 36, 255]);
         draw_line_rgba(
             fb,
             0,
@@ -316,89 +343,78 @@ impl HudRenderer {
             fb.width as i32,
             bottom_y,
             2,
-            [60, 75, 100, 255],
+            [50, 65, 90, 255],
         );
 
-        let btn_gap = 12i32;
-        let total_w = fb.width as i32 - (btn_gap * 4);
-        let btn_w = (total_w / 3).max(60);
+        let btn_gap = 14i32;
+        let total_btn_w = fb.width as i32 - (btn_gap * 4);
+        let btn_w = (total_btn_w / 3).max(70) as u32;
+        let btn_h = 70u32;
+        let btn_y = bottom_y + 16;
 
-        // Prev Button
+        // Button 1: PREV
         let btn1_x = btn_gap;
-        draw_filled_rect_rgba(
-            fb,
-            btn1_x,
-            bottom_y + 15,
-            btn_w as u32,
-            60,
-            [35, 45, 65, 255],
-        );
+        draw_filled_rect_rgba(fb, btn1_x, btn_y, btn_w, btn_h, [36, 46, 66, 255]);
+        draw_rect_outline_rgba(fb, btn1_x, btn_y, btn_w, btn_h, 2, [60, 78, 110, 255]);
         EmbeddedFont::draw_text_rgba(
             fb,
-            btn1_x + 15,
-            bottom_y + 35,
+            btn1_x + (btn_w as i32 / 2) - 35,
+            btn_y + 24,
             "< PREV",
             2,
             [255, 255, 255, 255],
         );
 
-        // Finish Button
-        let btn2_x = btn1_x + btn_w + btn_gap;
-        draw_filled_rect_rgba(
-            fb,
-            btn2_x,
-            bottom_y + 15,
-            btn_w as u32,
-            60,
-            [180, 40, 40, 255],
-        );
+        // Button 2: FINISH
+        let btn2_x = btn1_x + btn_w as i32 + btn_gap;
+        draw_filled_rect_rgba(fb, btn2_x, btn_y, btn_w, btn_h, [190, 40, 40, 255]);
+        draw_rect_outline_rgba(fb, btn2_x, btn_y, btn_w, btn_h, 2, [240, 80, 80, 255]);
         EmbeddedFont::draw_text_rgba(
             fb,
-            btn2_x + 15,
-            bottom_y + 35,
+            btn2_x + (btn_w as i32 / 2) - 35,
+            btn_y + 24,
             "FINISH",
             2,
             [255, 255, 255, 255],
         );
 
-        // Next Button
-        let btn3_x = btn2_x + btn_w + btn_gap;
-        draw_filled_rect_rgba(
-            fb,
-            btn3_x,
-            bottom_y + 15,
-            btn_w as u32,
-            60,
-            [0, 150, 200, 255],
-        );
+        // Button 3: NEXT
+        let btn3_x = btn2_x + btn_w as i32 + btn_gap;
+        draw_filled_rect_rgba(fb, btn3_x, btn_y, btn_w, btn_h, [0, 140, 210, 255]);
+        draw_rect_outline_rgba(fb, btn3_x, btn_y, btn_w, btn_h, 2, [0, 200, 255, 255]);
         EmbeddedFont::draw_text_rgba(
             fb,
-            btn3_x + 15,
-            bottom_y + 35,
+            btn3_x + (btn_w as i32 / 2) - 35,
+            btn_y + 24,
             "NEXT >",
             2,
             [255, 255, 255, 255],
         );
+
+        // Bottom Architecture Tag
+        let sub_tag = "100% PURE RUST NATIVEACTIVITY // ZERO JAVA RUNTIME";
+        EmbeddedFont::draw_text_rgba(fb, 24, bottom_y + 98, sub_tag, 1, [120, 140, 170, 255]);
     }
 
     /// Renders a full-screen workout summary scorecard directly into the FrameBuffer.
     pub fn render_summary_card(fb: &mut FrameBuffer, summary: &WorkoutSummary) {
         // Dim the entire background
-        draw_filled_rect_rgba(fb, 0, 0, fb.width, fb.height, [10, 14, 20, 245]);
+        draw_filled_rect_rgba(fb, 0, 0, fb.width, fb.height, [8, 11, 16, 250]);
 
-        let card_w = (fb.width as i32 - 60).clamp(280, 600) as u32;
-        let card_h = (fb.height as i32 - 80).clamp(320, 480) as u32;
+        let card_w = (fb.width as i32 - 48).clamp(280, 700) as u32;
+        let card_h = (fb.height as i32 - 120).clamp(360, 520) as u32;
         let card_x = (fb.width as i32 - card_w as i32) / 2;
         let card_y = (fb.height as i32 - card_h as i32) / 2;
 
-        // Draw card background
-        draw_filled_rect_rgba(fb, card_x, card_y, card_w, card_h, [25, 32, 45, 255]);
+        // Card container
+        draw_filled_rect_rgba(fb, card_x, card_y, card_w, card_h, [22, 28, 42, 255]);
+        draw_rect_outline_rgba(fb, card_x, card_y, card_w, card_h, 3, [0, 200, 255, 255]);
 
         // Card Title
         EmbeddedFont::draw_text_rgba(
             fb,
-            card_x + 25,
-            card_y + 25,
+            card_x + 28,
+            card_y + 28,
             "WORKOUT SUMMARY",
             3,
             [0, 230, 255, 255],
@@ -408,8 +424,8 @@ impl HudRenderer {
         let ex_str = format!("EXERCISE: {}", summary.exercise_name.to_uppercase());
         EmbeddedFont::draw_text_rgba(
             fb,
-            card_x + 25,
-            card_y + 80,
+            card_x + 28,
+            card_y + 88,
             &ex_str,
             2,
             [255, 255, 255, 255],
@@ -426,8 +442,8 @@ impl HudRenderer {
         };
         EmbeddedFont::draw_text_rgba(
             fb,
-            card_x + 25,
-            card_y + 120,
+            card_x + 28,
+            card_y + 132,
             &reps_str,
             2,
             [46, 204, 113, 255],
@@ -437,8 +453,8 @@ impl HudRenderer {
         let dur_str = format!("DURATION: {:03.1} SECONDS", summary.total_duration_sec);
         EmbeddedFont::draw_text_rgba(
             fb,
-            card_x + 25,
-            card_y + 160,
+            card_x + 28,
+            card_y + 176,
             &dur_str,
             2,
             [241, 196, 15, 255],
@@ -456,16 +472,18 @@ impl HudRenderer {
             'D' => [230, 126, 34, 255],
             _ => [231, 76, 60, 255],
         };
-        EmbeddedFont::draw_text_rgba(fb, card_x + 25, card_y + 200, &score_str, 2, grade_color);
+        EmbeddedFont::draw_text_rgba(fb, card_x + 28, card_y + 220, &score_str, 2, grade_color);
 
-        // Dismiss CTA
+        // Action CTA
+        let cta_y = card_y + card_h as i32 - 70;
+        draw_filled_rect_rgba(fb, card_x + 20, cta_y, card_w - 40, 50, [0, 140, 210, 255]);
         EmbeddedFont::draw_text_rgba(
             fb,
-            card_x + 25,
-            card_y + card_h as i32 - 45,
-            ">> TAP ANYWHERE TO CONTINUE <<",
+            card_x + 40,
+            cta_y + 16,
+            ">> TAP TO START NEXT WORKOUT <<",
             2,
-            [180, 190, 200, 255],
+            [255, 255, 255, 255],
         );
     }
 }
@@ -478,9 +496,9 @@ mod tests {
     #[test]
     fn test_render_skeleton_and_hud() {
         let (w, h) = (640, 480);
-        let stride = w * 4;
+        let stride_pixels = w;
         let mut buffer = vec![0u8; (w * h * 4) as usize];
-        let mut fb = FrameBuffer::new(&mut buffer, w, h, stride);
+        let mut fb = FrameBuffer::new(&mut buffer, w, h, stride_pixels);
 
         let landmarks = vec![Landmark::new(0.5, 0.5, 0.0, 0.9, 0.9); 33];
         HudRenderer::render_skeleton(&mut fb, &landmarks, 0.5);
@@ -516,10 +534,10 @@ mod tests {
 
     #[test]
     fn test_render_workout_screen() {
-        let (w, h) = (640, 480);
-        let stride = w * 4;
+        let (w, h) = (720, 1280);
+        let stride_pixels = w;
         let mut buffer = vec![0u8; (w * h * 4) as usize];
-        let mut fb = FrameBuffer::new(&mut buffer, w, h, stride);
+        let mut fb = FrameBuffer::new(&mut buffer, w, h, stride_pixels);
 
         HudRenderer::render_workout_screen(&mut fb, "squat", 0, 18, None);
         let non_zero = fb.buffer.iter().filter(|&&b| b > 0).count();
@@ -531,10 +549,10 @@ mod tests {
 
     #[test]
     fn test_render_summary_card() {
-        let (w, h) = (640, 480);
-        let stride = w * 4;
+        let (w, h) = (720, 1280);
+        let stride_pixels = w;
         let mut buffer = vec![0u8; (w * h * 4) as usize];
-        let mut fb = FrameBuffer::new(&mut buffer, w, h, stride);
+        let mut fb = FrameBuffer::new(&mut buffer, w, h, stride_pixels);
 
         let summary = WorkoutSummary {
             exercise_name: "squat".to_string(),
