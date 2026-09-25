@@ -90,12 +90,8 @@ fn process_stream(
             .map(|lm| Landmark::new(lm.x, lm.y, lm.z, lm.visibility, lm.presence))
             .collect();
 
-        let result = engine.process_landmarks(
-            &landmarks,
-            frame.width,
-            frame.height,
-            frame.timestamp_sec,
-        )?;
+        let result =
+            engine.process_landmarks(&landmarks, frame.width, frame.height, frame.timestamp_sec)?;
 
         let output = FrameOutput {
             frame_idx: frame.frame_idx,
@@ -159,9 +155,7 @@ fn run_demo() -> Result<(), Box<dyn std::error::Error>> {
     println!("------------------------------------------------------------");
     engine.start_exercise("squat")?;
 
-    let angles = [
-        175.0, 160.0, 130.0, 100.0, 80.0, 75.0, 95.0, 140.0, 175.0,
-    ];
+    let angles = [175.0, 160.0, 130.0, 100.0, 80.0, 75.0, 95.0, 140.0, 175.0];
     let timestamps = [0.0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4];
     let (w, h) = (1000u32, 1000u32);
 

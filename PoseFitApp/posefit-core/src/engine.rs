@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::definitions::{ExerciseConfig, load_from_str};
@@ -7,28 +6,19 @@ use crate::exercise::{Exercise, ExerciseResult};
 use crate::exercises::create_exercise;
 use crate::landmarks::Landmark;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkoutSummary {
-    pub exercise_name: String,
-    pub total_reps: u32,
-    pub counter_left: u32,
-    pub counter_right: u32,
-    pub total_duration_sec: f64,
-    pub avg_form_score: u32,
-    pub final_grade: char,
-}
-
-/// Abstract pose estimator trait for BlazePose or mock inference.
+/// Trait abstracting on-device pose estimation neural networks (e.g. MediaPipe BlazePose, MoveNet).
 pub trait PoseEstimator: Send + Sync {
+    /// Ingests raw RGB pixel data and produces 33 normalized landmarks.
     fn estimate(
         &mut self,
-        frame_data: &[u8],
+        image_bytes: &[u8],
         width: u32,
         height: u32,
     ) -> Result<Vec<Landmark>, PoseFitError>;
 }
 
-/// Mock pose estimator for testing and headless execution without MediaPipe.
+/// Mock estimator for deterministic unit testing and verification.
+#[derive(Debug, Clone, Default)]
 pub struct MockPoseEstimator {
     pub next_landmarks: Vec<Landmark>,
 }
@@ -40,14 +30,10 @@ impl MockPoseEstimator {
         }
     }
 
-    pub fn set_landmarks(&mut self, landmarks: Vec<Landmark>) {
-        self.next_landmarks = landmarks;
-    }
-}
-
-impl Default for MockPoseEstimator {
-    fn default() -> Self {
-        Self::new()
+    pub fn with_landmarks(landmarks: Vec<Landmark>) -> Self {
+        Self {
+            next_landmarks: landmarks,
+        }
     }
 }
 
@@ -67,6 +53,7 @@ impl PoseEstimator for MockPoseEstimator {
 pub struct PoseFitEngine {
     configs: HashMap<String, ExerciseConfig>,
     active_exercise: Option<Box<dyn Exercise>>,
+    estimator: Option<Box<dyn PoseEstimator>>,
     workout_start_time: Option<f64>,
     workout_last_time: Option<f64>,
 }
@@ -82,9 +69,21 @@ impl PoseFitEngine {
         Self {
             configs: HashMap::new(),
             active_exercise: None,
+            estimator: None,
             workout_start_time: None,
             workout_last_time: None,
         }
+    }
+
+    /// Sets or replaces the active on-device pose estimation engine.
+    pub fn with_estimator(mut self, estimator: Box<dyn PoseEstimator>) -> Self {
+        self.estimator = Some(estimator);
+        self
+    }
+
+    /// Sets the estimator dynamically on an existing engine instance.
+    pub fn set_estimator(&mut self, estimator: Box<dyn PoseEstimator>) {
+        self.estimator = Some(estimator);
     }
 
     /// Registers a single exercise from a YAML configuration string.
@@ -146,6 +145,26 @@ impl PoseFitEngine {
         Ok(())
     }
 
+    /// Ingests raw RGB camera/video frames, runs pose estimation, and processes exercise logic.
+    pub fn process_image_bytes(
+        &mut self,
+        image_bytes: &[u8],
+        width: u32,
+        height: u32,
+        timestamp_sec: f64,
+    ) -> Result<ExerciseResult, PoseFitError> {
+        let landmarks = match self.estimator {
+            Some(ref mut est) => est.estimate(image_bytes, width, height)?,
+            None => {
+                return Err(PoseFitError::EstimationError(
+                    "No PoseEstimator configured. Call set_estimator() or with_estimator() first."
+                        .to_string(),
+                ));
+            }
+        };
+        self.process_landmarks(&landmarks, width, height, timestamp_sec)
+    }
+
     /// Ingests a frame's landmarks, processes FSM, counting, and scoring.
     pub fn process_landmarks(
         &mut self,
@@ -205,6 +224,18 @@ impl PoseFitEngine {
     }
 }
 
+/// Final workout summary generated when an exercise session ends.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkoutSummary {
+    pub exercise_name: String,
+    pub total_reps: u32,
+    pub counter_left: u32,
+    pub counter_right: u32,
+    pub total_duration_sec: f64,
+    pub avg_form_score: u32,
+    pub final_grade: char,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,5 +265,19 @@ mod tests {
 
         let summary = engine.stop_exercise().unwrap();
         assert_eq!(summary.exercise_name, "squat");
+    }
+
+    #[test]
+    fn test_engine_image_bytes_processing_with_estimator() {
+        let estimator = MockPoseEstimator::new();
+        let mut engine = PoseFitEngine::new().with_estimator(Box::new(estimator));
+        engine.register_all_bundled_exercises().unwrap();
+        engine.start_exercise("hammer_curl").unwrap();
+
+        let dummy_frame = vec![128u8; 640 * 480 * 3];
+        let res = engine
+            .process_image_bytes(&dummy_frame, 640, 480, 0.0)
+            .unwrap();
+        assert_eq!(res.exercise_name, "hammer_curl");
     }
 }

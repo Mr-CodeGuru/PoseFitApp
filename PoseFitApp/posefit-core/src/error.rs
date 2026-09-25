@@ -25,4 +25,7 @@ pub enum PoseFitError {
 
     #[error("Invalid exercise state: '{0}'")]
     InvalidState(String),
+
+    #[error("Pose estimation error: {0}")]
+    EstimationError(String),
 }

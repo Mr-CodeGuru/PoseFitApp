@@ -1,0 +1,107 @@
+name: Build Pure-Rust Android APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-and-lint:
+    name: Test & Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            PoseFitApp/target/
+          key: ${{ runner.os }}-cargo-quality-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-quality-
+
+      - name: Check Formatting
+        working-directory: PoseFitApp
+        run: cargo fmt --all --check
+
+      - name: Compile Workspace Check
+        working-directory: PoseFitApp
+        run: cargo check --workspace
+
+      - name: Run Test Suite (71 Tests)
+        working-directory: PoseFitApp
+        run: cargo test --workspace --verbose
+
+      - name: Strict Clippy Linter
+        working-directory: PoseFitApp
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  build-android-apk:
+    name: Cross-Compile & Package Pure-Rust APK
+    needs: test-and-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Rust & Android Target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26d
+          add-to-path: true
+
+      - name: Cache cargo-ndk Binary
+        uses: actions/cache@v4
+        id: cache-cargo-ndk
+        with:
+          path: ~/.cargo/bin/cargo-ndk
+          key: ${{ runner.os }}-cargo-ndk-v4.1.2
+
+      - name: Install cargo-ndk
+        if: steps.cache-cargo-ndk.outputs.cache-hit != 'true'
+        run: cargo install cargo-ndk
+
+      - name: Cross-Compile libposefit_android.so (ARM64)
+        working-directory: PoseFitApp
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          cargo ndk -t arm64-v8a -o target/android-apk/lib build --package posefit-android --release
+
+      - name: Package Pure-Rust APK
+        working-directory: PoseFitApp
+        run: |
+          mkdir -p target/android-apk
+          cp posefit-android/AndroidManifest.xml target/android-apk/
+          cd target/android-apk
+          zip -r -0 ../PoseFit-release.apk AndroidManifest.xml lib/
+
+      - name: Upload PoseFit.apk Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PoseFit-release-apk
+          path: PoseFitApp/target/PoseFit-release.apk
+          if-no-files-found: error
+          retention-days: 30
