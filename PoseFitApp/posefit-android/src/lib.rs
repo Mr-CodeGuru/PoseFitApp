@@ -14,8 +14,8 @@ use posefit_core::rendering::{FrameBuffer, HudRenderer};
 
 #[cfg(target_os = "android")]
 use android_activity::{
-    input::{InputEvent, MotionAction},
     AndroidApp, InputStatus, MainEvent, PollEvent,
+    input::{InputEvent, MotionAction},
 };
 
 /// High-level interaction mode of the Android application.
@@ -90,13 +90,7 @@ impl AndroidPoseFitApp {
     }
 
     /// Renders the complete application UI directly onto an arbitrary raster buffer.
-    pub fn draw_screen_to_buffer(
-        &self,
-        buffer: &mut [u8],
-        width: u32,
-        height: u32,
-        stride: u32,
-    ) {
+    pub fn draw_screen_to_buffer(&self, buffer: &mut [u8], width: u32, height: u32, stride: u32) {
         let mut fb = FrameBuffer::new(buffer, width, height, stride);
         match &self.mode {
             AppMode::WorkoutSummary(summary) => {
@@ -254,8 +248,9 @@ fn android_main(app: AndroidApp) {
     let mut quit = false;
 
     while !quit {
-        app.poll_events(Some(std::time::Duration::from_millis(30)), |event| {
-            match event {
+        app.poll_events(
+            Some(std::time::Duration::from_millis(30)),
+            |event| match event {
                 PollEvent::Wake => {}
                 PollEvent::Timeout => {}
                 PollEvent::Main(main_event) => match main_event {
@@ -290,8 +285,8 @@ fn android_main(app: AndroidApp) {
                     _ => {}
                 },
                 _ => {}
-            }
-        });
+            },
+        );
 
         // Ingest touch inputs from native input queue in pure Rust
         #[cfg(target_os = "android")]
