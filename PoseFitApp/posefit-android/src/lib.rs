@@ -155,7 +155,7 @@ impl AndroidPoseFitApp {
 
 /// Pure Rust entrypoint invoked directly by Android OS via `NativeActivity`.
 #[cfg(target_os = "android")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
     android_logger::init_once(
         android_logger::Config::default()
@@ -176,7 +176,7 @@ fn android_main(app: AndroidApp) {
         }
     };
 
-    let (mut win_w, mut win_h) = (1080u32, 1920u32);
+    let (win_w, win_h) = (1080u32, 1920u32);
     let mut quit = false;
 
     while !quit {
@@ -189,7 +189,7 @@ fn android_main(app: AndroidApp) {
                         info!("Native ANativeWindow initialized. Direct Rust GPU/Surface pipeline active.");
                         state.is_active = true;
                     }
-                    MainEvent::TermWindow { .. } => {
+                    MainEvent::TerminateWindow { .. } => {
                         info!("Native ANativeWindow terminated.");
                         state.is_active = false;
                     }
@@ -203,7 +203,7 @@ fn android_main(app: AndroidApp) {
                         info!("App Paused. Suspending camera ingestion.");
                         state.is_active = false;
                     }
-                    MainEvent::Resume => {
+                    MainEvent::Resume { .. } => {
                         info!("App Resumed. Resuming real-time workout tracking.");
                         state.is_active = true;
                     }
@@ -217,22 +217,21 @@ fn android_main(app: AndroidApp) {
             }
         });
 
-        // Ingest touch inputs from native input queue
+        // Ingest touch inputs from native input queue in pure Rust
         #[cfg(target_os = "android")]
-        {
-            let mut input_iter = app.input_events_iter().ok();
-            if let Some(ref mut iter) = input_iter {
-                while let Some(input_event) = iter.next() {
-                    if let InputEvent::MotionEvent(motion) = &input_event {
-                        if motion.action() == MotionAction::Down {
-                            let pointer = motion.pointer_at_index(0);
-                            let x = pointer.x();
-                            let y = pointer.y();
-                            state.handle_touch(x, y, win_w, win_h);
-                        }
+        if let Ok(mut input_iter) = app.input_events_iter() {
+            while input_iter.next(|input_event| {
+                if let InputEvent::MotionEvent(motion) = input_event {
+                    if motion.action() == MotionAction::Down {
+                        let pointer = motion.pointer_at_index(0);
+                        let x = pointer.x();
+                        let y = pointer.y();
+                        state.handle_touch(x, y, win_w, win_h);
+                        return InputStatus::Handled;
                     }
                 }
-            }
+                InputStatus::Unhandled
+            }) {}
         }
     }
 
