@@ -1,417 +1,188 @@
-# 🏋️ Fitness Trainer with AI Pose Estimation
+# 🏋️ PoseFit — Pure Rust Computer-Vision Fitness Engine & Android App
 
-An AI-powered web application that tracks your exercises using computer vision and provides real-time form feedback with scoring.
+[![Rust](https://img.shields.io/badge/Rust-1.80+-orange.svg)](https://www.rust-lang.org/)
+[![Android](https://img.shields.io/badge/Android-NativeActivity-brightgreen.svg)](https://developer.android.com/ndk)
+[![Java/Kotlin Footprint](https://img.shields.io/badge/Java%20%2F%20Kotlin-0%20lines-blue.svg)](#zero-java--zero-kotlin-architecture)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blueviolet.svg)](.github/workflows/android-rust-ci.yml)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![Flask](https://img.shields.io/badge/Flask-2.0+-green.svg)
-![MediaPipe](https://img.shields.io/badge/MediaPipe-Pose-orange.svg)
-![License](https://img.shields.io/badge/License-MIT-yellow.svg)
-
----
-
-## ✨ Features
-
-### 🎥 Real-time Exercise Tracking
-- 📷 **Real-time Pose Estimation** using MediaPipe
-- 🎯 **18 Built-in Exercises** - Full body workout coverage
-- 📊 **Form Score System** (0-100) with A-F grading
-- 🔄 **Automatic Rep Counting** with state machine logic
-- 💬 **Real-time Form Feedback** - Instant correction tips
-
-### 📹 Video Analysis Mode
-- 🎬 **Upload & Analyze Videos** - Process pre-recorded workout videos
-- 🦴 **Skeleton Overlay** - See your pose detection on processed video
-- 📈 **Live Statistics Panel** - Real-time rep count, form score, and state
-- 🖥️ **Processing Terminal** - Watch analysis progress with detailed logs
-- 💾 **H.264 Video Output** - Browser-compatible processed videos with imageio-ffmpeg
-
-### 👤 User Profile System
-- 📋 **Personal Information** - Track your fitness journey
-- 🎯 **Customizable Goals** - Set weekly workout and rep targets
-- 🏅 **Achievement System** - Unlock badges for milestones
-- 📊 **Activity Charts** - Visualize your workout history
-- ❤️ **Favorite Exercises** - Track your most-used exercises
-- ⚙️ **Settings** - Dark mode, notifications, units preference
-
-### 📊 Dashboard
-- 📈 **Workout Statistics** - Total workouts, reps, streaks
-- 📉 **Weekly Activity Charts** - Visualize your progress
-- 🥧 **Exercise Distribution** - See which exercises you do most
-- 📋 **Recent Workouts** - Quick view of latest sessions
-
-### ⚙️ Extensible Architecture
-- 📝 **YAML-based Exercise Definitions** - Add new exercises without writing code!
-- 🔀 **Three Exercise Types** - Standard, Bilateral (left/right), Duration-based
-- 🎨 **Customizable Visualization** - Colors, highlighted joints per exercise
+An ultra-high-performance, on-device AI fitness coaching application built in **100% pure Rust**. PoseFit tracks human body pose landmarks in real time, executes finite state machines to count repetitions or hold duration, scores exercise form quality (0–100 with A–F grading), delivers instant biomechanical correction cues, and renders a live HUD overlay.
 
 ---
 
-## 🏗️ System Architecture
+## ⚡ Key Highlights
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (Web UI)                             │
-│         index.html ← video stream (MJPEG) ← form feedback            │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │ HTTP/WebSocket
-┌────────────────────────────────▼────────────────────────────────────┐
-│                         BACKEND (Flask)                              │
-│                            app.py                                    │
-│   • Video capture & streaming                                        │
-│   • REST API endpoints                                               │
-│   • Session management                                               │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │
-┌────────────────────────────────▼────────────────────────────────────┐
-│                      EXERCISE ENGINE                                 │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐         │
-│  │  BaseExercise  │  │    Loader      │  │     Engine     │         │
-│  │   (FSM Core)   │  │  (YAML→Obj)    │  │   (Wrapper)    │         │
-│  │                │  │                │  │                │         │
-│  │ • State Machine│  │ • Parse YAML   │  │ • process_frame│         │
-│  │ • Rep Counter  │  │ • Validate     │  │ • draw_overlay │         │
-│  │ • Form Score   │  │ • Create Obj   │  │ • draw_score   │         │
-│  │ • Feedback     │  │                │  │                │         │
-│  └────────────────┘  └────────────────┘  └────────────────┘         │
-│         ▲                                                            │
-│         │ inheritance                                                │
-│  ┌──────┴───────┐  ┌────────────────┐                               │
-│  │  Bilateral   │  │   Duration     │                               │
-│  │  Exercise    │  │   Exercise     │                               │
-│  │ (L/R sides)  │  │ (time-based)   │                               │
-│  └──────────────┘  └────────────────┘                               │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │ loads
-┌────────────────────────────────▼────────────────────────────────────┐
-│                    YAML DEFINITIONS (18 exercises)                   │
-│  squat.yaml │ push_up.yaml │ plank.yaml │ deadlift.yaml │ ...       │
-│                                                                      │
-│  Each YAML contains:                                                 │
-│  • Angle definitions (landmarks, ranges)                             │
-│  • State machine (states, transitions, conditions)                   │
-│  • Counter rules (when to count a rep)                               │
-│  • Form feedback rules (warnings, priorities)                        │
-│  • Tempo guidance (up/down/hold timing)                              │
-│  • Visualization config (colors, highlighted joints)                 │
-└─────────────────────────────────────────────────────────────────────┘
+- **100% Pure Rust on Android**: Built on Android's `NativeActivity` (`android-activity`) with `android:hasCode="false"`. **Zero Kotlin, zero Java, zero JVM runtime overhead**.
+- **18 Built-in Exercise Definitions**: Evaluated via a custom, sandboxed AST expression engine for 60 mathematical condition rules.
+- **On-Device ML Inference Pipeline**: Embedded aspect-ratio letterboxing, normalization, and 33 3D landmark tensor decoding for BlazePose.
+- **Dependency-Free Native HUD & Skeleton**: Built-in raster renderer and 8x16 embedded bitmap font that renders skeleton vectors, joint angle gauges, rep counters, and scorecards directly into Android's `ANativeWindow_Buffer`.
+- **Zero-Storage Cloud Compilation**: Automated GitHub Actions CI workflow compiles the ARM64 Android `.so` and packages `PoseFit-release.apk` in the cloud without requiring local NDK storage.
+
+---
+
+## 📐 System Architecture
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ Android OS (Linux Kernel 5.x / 6.x + SurfaceFlinger + Camera2 HAL)     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Launches android.app.NativeActivity
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│               libposefit_android.so (100% Compiled Rust)               │
+│                                                                        │
+│  #[unsafe(no_mangle)]                                                  │
+│  fn android_main(app: AndroidApp) {                                    │
+│      ├── 1. Pure Rust Native Event Loop (android-activity)             │
+│      │      └─ Ingests Window, Input, Pause, Resume, Destroy events    │
+│      │                                                                 │
+│      ├── 2. Direct Camera Ingestion (camera2-ndk / AImageReader)       │
+│      │      └─ Zero JNI: Receives raw RGB byte slices directly         │
+│      │                                                                 │
+│      ├── 3. On-Device Neural Network Inference (BlazePoseEstimator)    │
+│      │      ├─ Letterbox Preprocessing & Aspect-Ratio Normalization    │
+│      │      └─ 33 3D Landmark Coordinate Tensor Decoding & Inversion   │
+│      │                                                                 │
+│      ├── 4. Exercise State Machine & Counting Engine (PoseFitEngine)   │
+│      │      ├─ 18 Bundled YAML Exercises (Squat, Bicep Curl, Plank...) │
+│      │      ├─ 2D Cosine Angle Math & Temporal Smoothing Filters       │
+│      │      ├─ Rep Debounce & Independent Bilateral Arm Isolation      │
+│      │      ├─ Isometric Hold Duration & Break Tracking (Plank)        │
+│      │      └─ Form Scoring (0-100) & Real-Time Feedback Warnings      │
+│      │                                                                 │
+│      ├── 5. On-Device HUD & Skeleton Overlay (HudRenderer)             │
+│      │      ├─ Anti-aliased skeleton lines & colored joint dots        │
+│      │      ├─ Real-time HUD banner, rep counts, and grade pill        │
+│      │      ├─ Self-contained 8x16 embedded bitmap typography          │
+│      │      └─ Renders directly into ANativeWindow_Buffer              │
+│      │                                                                 │
+│      └── 6. Interactive Touch Input Handler (Native Motion Events)     │
+│             ├─ Tap Top-Left: Cycle through exercises                   │
+│             ├─ Tap Top-Right: Finish workout & view scorecard modal    │
+│             └─ Tap Modal: Dismiss and start next exercise              │
+│  }                                                                     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📊 Form Score System
+## 📂 Repository Workspace Structure
 
-The app calculates a **Form Score (0-100)** for each exercise session:
-
-| Component | Weight | Description |
-|-----------|--------|-------------|
-| Angle Accuracy | 40% | How close your angles are to ideal |
-| Tempo Compliance | 30% | Following the recommended speed |
-| Form Feedback | 30% | Penalty for triggered warnings |
-
-### Grade Scale
-| Score | Grade | Color |
-|-------|-------|-------|
-| 90-100 | A | 🟢 Green |
-| 80-89 | B | 🔵 Blue |
-| 70-79 | C | 🟡 Yellow |
-| 60-69 | D | 🟠 Orange |
-| 0-59 | F | 🔴 Red |
-
----
-
-## 📁 Available Exercises (18)
-
-### Upper Body
-- 💪 **Hammer Curl** - Bicep curl with neutral grip
-- 💪 **Bicep Curl** - Classic bicep exercise (bilateral)
-- 💪 **Tricep Dip** - Chair/bench dips for triceps
-- 💪 **Shoulder Press** - Overhead pressing
-- 💪 **Lateral Raise** - Side delt raises
-- 💪 **Push Up** - Classic chest exercise
-
-### Lower Body
-- 🦵 **Squat** - Bodyweight squat
-- 🦵 **Lunge** - Forward lunge (bilateral)
-- 🦵 **Side Lunge** - Lateral lunge
-- 🦵 **Deadlift** - Romanian deadlift for hamstrings
-- 🦵 **Glute Bridge** - Hip bridge for glutes
-- 🦵 **Calf Raise** - Standing calf raises
-- 🦵 **Wall Sit** - Isometric hold (duration)
-
-### Cardio / Full Body
-- 🔥 **Mountain Climber** - Dynamic core/cardio
-- 🔥 **High Knees** - Running in place
-- 🔥 **Jumping Jack** - Classic cardio move
-- 🔥 **Leg Raise** - Lying leg raises for abs
-- 🧘 **Plank** - Core hold (duration)
+```text
+PoseFit/
+├── .github/workflows/
+│   └── android-rust-ci.yml       # Cloud CI: Checks, tests, and builds PoseFit.apk
+├── data/
+│   ├── dumbel-workout.mp4        # Sample workout video
+│   └── annotage_dumbel-workout.mp4 # Video annotated with Rust engine & HUD
+├── exercises/definitions/        # 18 Canonical exercise YAML definitions
+│   ├── squat.yaml, bicep_curl.yaml, hammer_curl.yaml, plank.yaml...
+├── PoseFitApp/                   # Pure-Rust Cargo Workspace
+│   ├── Cargo.toml                # Multi-crate virtual workspace manifest
+│   ├── build-apk.sh              # Local Android packaging script
+│   ├── README_ANDROID.md         # In-depth Android NDK deployment guide
+│   │
+│   ├── posefit-core/             # Core Computer-Vision & Fitness Logic
+│   │   ├── src/
+│   │   │   ├── definitions/      # YAML loader & 18 embedded configs
+│   │   │   ├── engine.rs         # PoseFitEngine coordinating exercise flow
+│   │   │   ├── exercises/        # Standard, Bilateral, Duration engines
+│   │   │   ├── feedback.rs       # Real-time form defect alerts
+│   │   │   ├── fsm.rs            # 60-condition AST expression parser
+│   │   │   ├── inference/        # BlazePose pre/postprocessing & estimator
+│   │   │   ├── landmarks.rs      # 33 MediaPipe landmark coordinates
+│   │   │   ├── math.rs           # 2D vector cosine angle math
+│   │   │   ├── rendering/        # Raster primitives, embedded font & HUD
+│   │   │   ├── scoring.rs        # 0-100 Form scoring & grade boundaries
+│   │   │   └── smoothing.rs      # Temporal moving average window filters
+│   │   └── tests/golden_parity.rs# 7 Golden verification tests
+│   │
+│   ├── posefit-android/          # Android NativeActivity App
+│   │   ├── AndroidManifest.xml   # android:hasCode="false"
+│   │   └── src/lib.rs            # android_main event loop & touch handler
+│   │
+│   └── posefit-app/              # Desktop CLI & Video Stream Runner
+│       └── src/main.rs           # CLI subcommands (test, info, process-stream)
+│
+└── SUMMARY.md                    # Complete reverse-engineering & migration audit
+```
 
 ---
 
-## 🚀 Quick Start
+## 🏃 Supported Exercises (18 Bundled)
 
-### 1. Clone & Install
+| Category | Exercises | Tracking Method |
+| :--- | :--- | :--- |
+| **Standard Repetition** | Squat, Push-up, Lunge, Deadlift, Tricep Dip, Glute Bridge, Jumping Jack, Mountain Climber, High Knees, Leg Raise, Side Lunge | Cyclic FSM state transition & debounce |
+| **Bilateral Isolation** | Bicep Curl, Hammer Curl, Shoulder Press, Lateral Raise, Calf Raise | Independent Left/Right arm state machines |
+| **Duration & Isometric** | Plank, Wall Sit | Continuous holding time accumulator & break tracking |
+
+---
+
+## 🧪 Local Testing & Verification
+
+All tests compile cleanly on desktop (macOS / Linux / Windows) without requiring an Android device or emulator:
 
 ```bash
-git clone https://github.com/yourusername/fitness-trainer-pose-estimation.git
-cd fitness-trainer-pose-estimation
+cd PoseFitApp
 
-# Create virtual environment (optional)
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: venv\Scripts\activate  # Windows
+# 1. Format check
+cargo fmt --all --check
 
-# Install dependencies
-pip install -r requirements.txt
+# 2. Workspace compilation check
+cargo check --workspace
+
+# 3. Run all 71 unit & golden parity tests
+cargo test --workspace
+
+# 4. Strict Clippy linter
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
-### 2. Run the Application
+---
+
+## 🚀 Building & Deploying the Android App
+
+### Method 1: Cloud Build via GitHub Actions (Recommended)
+
+1. Push your code to GitHub:
+   ```bash
+   git push origin main
+   ```
+2. Navigate to the **Actions** tab on your GitHub repository.
+3. Once the workflow completes, download the compiled **`PoseFit-release-apk`** artifact.
+4. Install directly to your phone:
+   ```bash
+   adb install -r PoseFit-release.apk
+   ```
+
+### Method 2: Local Compilation (Requires Android NDK)
+
+If you have the Android NDK installed:
 
 ```bash
-python app.py
-```
+# Add ARM64 Rust target
+rustup target add aarch64-linux-android
 
-### 3. Open in Browser
+# Build native shared library & package APK
+./PoseFitApp/build-apk.sh aarch64-linux-android
 
-Navigate to: **http://127.0.0.1:5000**
-
----
-
-## ➕ Adding New Exercises
-
-**No coding required!** Just create a YAML file:
-
-### Step 1: Create YAML in `exercises/definitions/`
-
-```yaml
-# exercises/definitions/my_new_exercise.yaml
-name: "My New Exercise"
-type: "standard"  # or "bilateral" / "duration"
-description: "Description of the exercise"
-
-# Define body angles to track
-angles:
-  primary_angle:
-    landmarks: [11, 13, 15]  # MediaPipe landmark IDs
-    range: [30, 170]         # Valid angle range
-
-# State machine definition
-states:
-  - name: "START"
-    condition:
-      angle: "primary_angle"
-      operator: ">"
-      value: 150
-    next_state: "MIDDLE"
-    feedback: "Starting position"
-    
-  - name: "MIDDLE"
-    condition:
-      angle: "primary_angle"
-      operator: "<"
-      value: 60
-    next_state: "END"
-    feedback: "Good form!"
-    
-  - name: "END"
-    condition:
-      angle: "primary_angle"
-      operator: ">"
-      value: 150
-    next_state: "START"
-    feedback: "Rep complete!"
-
-# When to count a rep
-counter:
-  increment_on: "END"
-
-# Form warnings
-feedback:
-  - name: "form_warning"
-    description: "Bad form detected"
-    angle: "primary_angle"
-    condition:
-      operator: "<"
-      value: 30
-    message: "Don't go too low!"
-    priority: 1
-
-# Tempo in seconds
-tempo:
-  up_seconds: 1.0
-  down_seconds: 2.0
-  hold_seconds: 0.5
-
-# Display settings
-visualization:
-  primary_angle: "primary_angle"
-  show_angles: ["primary_angle"]
-  highlight_landmarks: [11, 13, 15]
-  color_scheme: "green"
-```
-
-### Step 2: Test
-
-```bash
-python test_engine.py
-```
-
-### Step 3: Use
-
-Restart the app - your exercise is now available!
-
----
-
-## 📍 MediaPipe Landmarks Reference
-
-```
- 0  = NOSE                    
-11  = LEFT_SHOULDER       12 = RIGHT_SHOULDER
-13  = LEFT_ELBOW          14 = RIGHT_ELBOW
-15  = LEFT_WRIST          16 = RIGHT_WRIST
-23  = LEFT_HIP            24 = RIGHT_HIP
-25  = LEFT_KNEE           26 = RIGHT_KNEE
-27  = LEFT_ANKLE          28 = RIGHT_ANKLE
-31  = LEFT_FOOT_INDEX     32 = RIGHT_FOOT_INDEX
+# Stream real-time Android logcat logs
+adb logcat -s PoseFitRust:V
 ```
 
 ---
 
-## 📂 Project Structure
+## 🕹️ Interactive Android Controls
 
-```
-fitness-trainer-pose-estimation/
-├── 📄 app.py                    # Flask application + video streaming
-├── 📄 video_processor.py        # Standalone video analysis with skeleton overlay
-├── 📄 main.py                   # CLI runner (standalone)
-├── 📄 requirements.txt
-│
-├── 📁 exercises/
-│   ├── 📄 base_exercise.py      # FSM engine (BaseExercise, Bilateral, Duration)
-│   ├── 📄 loader.py             # YAML loader & validator
-│   ├── 📄 engine.py             # High-level API wrapper
-│   └── 📁 definitions/          # 🎯 YAML exercise files (18 exercises)
-│       ├── squat.yaml
-│       ├── push_up.yaml
-│       ├── hammer_curl.yaml
-│       ├── bicep_curl.yaml
-│       ├── tricep_dip.yaml
-│       ├── shoulder_press.yaml
-│       ├── lateral_raise.yaml
-│       ├── lunge.yaml
-│       ├── side_lunge.yaml
-│       ├── deadlift.yaml
-│       ├── glute_bridge.yaml
-│       ├── calf_raise.yaml
-│       ├── wall_sit.yaml
-│       ├── plank.yaml
-│       ├── mountain_climber.yaml
-│       ├── high_knees.yaml
-│       ├── jumping_jack.yaml
-│       └── leg_raise.yaml
-│
-├── 📁 pose_estimation/
-│   ├── 📄 estimation.py         # MediaPipe wrapper
-│   └── 📄 angle_calculation.py  # Angle math
-│
-├── 📁 feedback/
-│   ├── 📄 indicators.py         # UI components
-│   ├── 📄 information.py        # Exercise metadata
-│   └── 📄 layout.py
-│
-├── 📁 db/
-│   └── 📄 workout_logger.py     # Workout history logging
-│
-├── 📁 templates/
-│   ├── 📄 index.html            # Home - Real-time exercise tracking
-│   ├── 📄 video_analysis.html   # Video upload & analysis page
-│   ├── 📄 dashboard.html        # Stats dashboard
-│   └── 📄 profile.html          # User profile & settings
-│
-└── 📁 static/
-    ├── 📁 css/
-    │   ├── 📄 style.css         # Global styles
-    │   ├── 📄 dashboard.css     # Dashboard page styles
-    │   ├── 📄 profile.css       # Profile page styles
-    │   └── 📄 video_analysis.css # Video analysis styles
-    ├── 📁 js/
-    │   ├── 📄 script.js         # Main page JavaScript
-    │   ├── 📄 dashboard.js      # Dashboard functionality
-    │   ├── 📄 profile.js        # Profile page functionality
-    │   └── 📄 video_analysis.js # Video analysis functionality
-    └── 📁 images/
-```
+| Action | Screen Region | Behavior |
+| :--- | :--- | :--- |
+| **Cycle Exercise** | Tap Top-Left (`EXERCISE: SQUAT [TAP TO CYCLE]`) | Immediately switches to the next bundled exercise |
+| **Finish Workout** | Tap Top-Right (`FORM SCORE`) | Concludes session and brings up full-screen scorecard |
+| **Dismiss Scorecard**| Tap Anywhere | Returns to live camera tracking for the next exercise |
 
 ---
 
-## 🔌 API Endpoints
+## 📄 License
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Home page - Real-time exercise tracking |
-| `/video_analysis` | GET | Video upload & analysis page |
-| `/dashboard` | GET | Workout statistics dashboard |
-| `/profile` | GET | User profile & settings |
-| `/video_feed` | GET | MJPEG video stream |
-| `/start_exercise` | POST | Start tracking an exercise |
-| `/stop_exercise` | POST | Stop current exercise |
-| `/get_status` | GET | Get current rep count & form score |
-| `/exercises` | GET | List all available exercises |
-| `/api/video/upload` | POST | Upload video for analysis |
-| `/api/video/status/<id>` | GET | Get video analysis status |
-| `/api/video/processed/<id>` | GET | Download processed video |
-| `/api/profile/update` | POST | Update user profile |
-
----
-
-## 🖼️ Screenshots
-
-### Home - Real-time Tracking
-Real-time pose estimation with skeleton overlay and form feedback.
-
-### Video Analysis
-Upload videos, analyze with skeleton overlay, and download processed results.
-
-### Profile
-Personal stats, achievements, goals tracking, and customizable settings.
-
----
-
-## 🛠️ Technologies
-
-- **Flask** - Web framework
-- **OpenCV** - Computer vision & video processing
-- **MediaPipe** - Google's pose estimation model
-- **imageio-ffmpeg** - H.264 video encoding for browser compatibility
-- **PyYAML** - Exercise definition parsing
-- **Chart.js** - Interactive charts for dashboard
-- **HTML/CSS/JS** - Modern responsive frontend
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/new-exercise`)
-3. Add your YAML exercise definition
-4. Run tests (`python test_engine.py`)
-5. Commit changes (`git commit -am 'Add new exercise'`)
-6. Push to branch (`git push origin feature/new-exercise`)
-7. Create Pull Request
-
----
-
-## 📜 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- [MediaPipe](https://mediapipe.dev/) by Google
-- [OpenCV](https://opencv.org/) community
-- [Flask](https://flask.palletsprojects.com/) framework
-
----
-
-**Made with ❤️ for fitness enthusiasts**
+This project is licensed under the [MIT License](LICENSE).
