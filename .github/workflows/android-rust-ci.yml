@@ -90,13 +90,47 @@ jobs:
         run: |
           cargo ndk -t arm64-v8a -o target/android-apk/lib build --package posefit-android --release
 
-      - name: Package Pure-Rust APK
+      - name: Package & Sign Pure-Rust APK (aapt2 + zipalign + apksigner)
         working-directory: PoseFitApp
         run: |
-          mkdir -p target/android-apk
-          cp posefit-android/AndroidManifest.xml target/android-apk/
+          # 1. Resolve Android platform android.jar
+          ANDROID_JAR=$(find "$ANDROID_HOME/platforms" -name "android.jar" | sort -V | tail -n 1)
+          echo "Using Android platform: $ANDROID_JAR"
+
+          # 2. Resolve Android SDK build-tools (aapt2, zipalign, apksigner)
+          BUILD_TOOLS_DIR=$(find "$ANDROID_HOME/build-tools" -name "aapt2" -exec dirname {} \; | sort -V | tail -n 1)
+          echo "Using Android build-tools: $BUILD_TOOLS_DIR"
+
+          # 3. Compile plain-text AndroidManifest.xml into Android Binary XML (AXML)
+          "$BUILD_TOOLS_DIR/aapt2" link \
+            -I "$ANDROID_JAR" \
+            --manifest posefit-android/AndroidManifest.xml \
+            -o target/PoseFit-base.apk
+
+          # 4. Add native compiled ARM64 library into lib/arm64-v8a/
           cd target/android-apk
-          zip -r -0 ../PoseFit-release.apk AndroidManifest.xml lib/
+          zip -u -r ../PoseFit-base.apk lib/
+          cd ../..
+
+          # 5. 4-byte Zipalign for direct memory-mapped native library execution
+          "$BUILD_TOOLS_DIR/zipalign" -v -p 4 target/PoseFit-base.apk target/PoseFit-aligned.apk
+
+          # 6. Generate debug signing keystore
+          keytool -genkey -v -keystore target/debug.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+          # 7. Sign APK with Android v1 + v2 + v3 signature schemes
+          "$BUILD_TOOLS_DIR/apksigner" sign \
+            --ks target/debug.keystore \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out target/PoseFit-release.apk \
+            target/PoseFit-aligned.apk
+
+          # 8. Verify APK integrity and signatures
+          "$BUILD_TOOLS_DIR/apksigner" verify -v target/PoseFit-release.apk
 
       - name: Upload PoseFit.apk Artifact
         uses: actions/upload-artifact@v4
